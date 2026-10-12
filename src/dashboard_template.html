@@ -1,0 +1,126 @@
+<title>SANDI Energy Dashboard</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: verdict strip, then before/after metric rows (paired bars to one scale), then fleet projection, per-class recall, method notes */
+:root{
+  --bg:#f3f5f4; --surface:#ffffff; --fg:#17221f; --muted:#5d6b67; --line:#d9e0dd;
+  --before:#a39c93; --after:#1f7a68; --good:#1f7a68; --bad:#b4472f;
+  --display:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101614; --surface:#18201e; --fg:#e6ece9; --muted:#93a29d; --line:#2a3532;
+  --before:#7d776f; --after:#4fc0a6; --good:#4fc0a6; --bad:#e0775d; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#101614; --surface:#18201e; --fg:#e6ece9; --muted:#93a29d; --line:#2a3532;
+  --before:#7d776f; --after:#4fc0a6; --good:#4fc0a6; --bad:#e0775d; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:15px/1.5 var(--body);padding-inline:16px;padding-block:24px 40px}
+.wrap{max-width:880px;margin:0 auto;display:grid;gap:28px}
+header{display:grid;gap:6px}
+.eyebrow{font:500 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+h1{font:600 clamp(28px,6vw,40px)/1.1 var(--display);margin:0;text-wrap:balance}
+h2{font:600 20px var(--display);margin:0 0 12px}
+.sub{color:var(--muted);margin:0;max-width:62ch}
+.verdict{display:flex;flex-wrap:wrap;gap:12px 32px;align-items:baseline;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px 20px}
+.verdict .big{font:600 44px/1 var(--display);color:var(--good);font-variant-numeric:tabular-nums}
+.verdict .lab{font-size:13px;color:var(--muted)}
+.pill{font:500 12px var(--mono);letter-spacing:.06em;padding:4px 10px;border-radius:99px;border:1px solid currentColor}
+.pass{color:var(--good)} .fail{color:var(--bad)}
+.legend{display:flex;gap:18px;font-size:13px;color:var(--muted);margin-bottom:8px}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.rows{display:grid;gap:18px}
+.row{display:grid;grid-template-columns:150px 1fr;gap:6px 16px;align-items:center}
+.row .name{font-weight:500}
+.row .name small{display:block;color:var(--muted);font-weight:400;font-size:12px}
+.bars{display:grid;gap:4px;min-width:0}
+.bar{display:flex;align-items:center;gap:8px}
+.bar i{display:block;height:14px;border-radius:2px;min-width:2px}
+.bar span{font:13px var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.delta{font:500 13px var(--mono);grid-column:2}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{text-align:right;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{font:500 12px var(--mono);letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+td.num{font-family:var(--mono);font-size:14px}
+.notes{color:var(--muted);font-size:13px;display:grid;gap:6px}
+.notes p{margin:0;max-width:72ch}
+@media (max-width:520px){.row{grid-template-columns:1fr}.delta{grid-column:1}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Team SANDI · Smart sanitary disposal unit · Green AI track</div>
+    <h1>Energy per inference, before and after optimisation</h1>
+    <p class="sub">IR presence, DS18B20 temperature and HX711 load-cell windows (3.2 s at 10 Hz) classified into Idle, Disposal, Near full, Full and Thermal alert.</p>
+  </header>
+
+  <section class="verdict" id="verdict"></section>
+
+  <section>
+    <h2>Before vs after</h2>
+    <div class="legend"><span><i class="sw" style="background:var(--before)"></i>Baseline FP32 MLP</span><span><i class="sw" style="background:var(--after)"></i>Optimised (distilled + INT8 + event gating)</span></div>
+    <div class="rows" id="rows"></div>
+  </section>
+
+  <section>
+    <h2>At fleet scale</h2>
+    <p class="sub" id="scale-sub"></p>
+    <div class="tablewrap"><table id="fleet"></table></div>
+  </section>
+
+  <section>
+    <h2>Recall by bin state</h2>
+    <div class="tablewrap"><table id="recall"></table></div>
+  </section>
+
+  <section class="notes" id="notes"></section>
+</div>
+
+<script>
+const R = __DATA__;
+const b=R.baseline,o=R.optimized,A=R.assumptions;
+const f=(v,d=1)=>v.toLocaleString("en-IN",{maximumFractionDigits:d,minimumFractionDigits:d});
+const pct=(a,c)=>(100*(1-c/a));
+
+document.getElementById("verdict").innerHTML=`
+  <div><div class="big">−${f(R.energy_reduction_pct)}%</div><div class="lab">energy per inference (target ≥ 50%)</div></div>
+  <div><div class="big" style="color:var(--fg)">${R.accuracy_loss_pts<=0?"+"+f(-R.accuracy_loss_pts,2):"−"+f(R.accuracy_loss_pts,2)} pts</div><div class="lab">accuracy change (limit −2 pts)</div></div>
+  <span class="pill ${R.pass?"pass":"fail"}">${R.pass?"TARGET MET":"TARGET NOT MET"}</span>`;
+
+const metrics=[
+ ["Energy / inference","µJ, "+R.energy_method.split(" (")[0],b.energy_uj,o.energy_uj,1],
+ ["Latency","µs per window, 1 core",b.latency_us,o.latency_us,1],
+ ["Model size","KB on disk",b.size_kb,o.size_kb,1],
+ ["Compute","multiply-accumulates",b.macs,o.macs,0],
+ ["Accuracy","% on "+A.test_windows.toLocaleString("en-IN")+" windows",b.accuracy*100,o.accuracy*100,2],
+];
+document.getElementById("rows").innerHTML=metrics.map(([n,u,x,y,d])=>{
+  const m=Math.max(x,y), acc=n==="Accuracy";
+  const w=v=>acc?(v-90)/10*100:v/m*100;          // accuracy axis starts at 90%
+  const dl=acc?`${y>=x?"+":""}${f(y-x,2)} pts`:`−${f(pct(x,y))}%`;
+  return `<div class="row"><div class="name">${n}<small>${u}</small></div>
+   <div class="bars">
+    <div class="bar"><i style="width:${w(x)}%;background:var(--before)"></i><span>${f(x,d)}</span></div>
+    <div class="bar"><i style="width:${w(y)}%;background:var(--after)"></i><span>${f(y,d)}</span></div>
+   </div><div class="delta" style="color:var(--good)">${dl}${acc?" · axis from 90%":""}</div></div>`}).join("");
+
+document.getElementById("scale-sub").textContent=
+ `${A.units.toLocaleString("en-IN")} units, ${A.inferences_per_sec_per_unit} inference per second each, all year. Grid ${A.grid_kgco2_per_kwh} kg CO₂/kWh, ₹${A.inr_per_kwh}/kWh.`;
+document.getElementById("fleet").innerHTML=`
+ <tr><th>Per year</th><th>Baseline</th><th>Optimised</th><th>Saved</th></tr>
+ <tr><td>Compute energy</td><td class="num">${f(b.kwh_year)} kWh</td><td class="num">${f(o.kwh_year)} kWh</td><td class="num">${f(b.kwh_year-o.kwh_year)} kWh</td></tr>
+ <tr><td>Electricity cost</td><td class="num">₹${f(b.inr_year,0)}</td><td class="num">₹${f(o.inr_year,0)}</td><td class="num">₹${f(b.inr_year-o.inr_year,0)}</td></tr>
+ <tr><td>Carbon</td><td class="num">${f(b.kgco2_year)} kg</td><td class="num">${f(o.kgco2_year)} kg</td><td class="num">${f(b.kgco2_year-o.kgco2_year)} kg</td></tr>`;
+
+const labels={IDLE:"Idle",DISPOSAL:"Disposal",NEAR_FULL:"Near full",FULL:"Full",THERMAL_ALERT:"Thermal alert"};
+document.getElementById("recall").innerHTML=`<tr><th>State</th><th>Baseline</th><th>Optimised</th></tr>`+
+ Object.entries(R.per_class_recall).map(([k,v])=>`<tr><td>${labels[k]}</td><td class="num">${f(v.baseline*100,2)}%</td><td class="num">${f(v.optimized*100,2)}%</td></tr>`).join("");
+
+document.getElementById("notes").innerHTML=`
+ <p><b>How energy was measured:</b> ${R.energy_method}. Run the hardware logger with an INA219 on the compute board's supply to replace this with measured power.</p>
+ <p><b>Where the saving comes from:</b> ${f(o.gate_rate*100)}% of windows had no presence, stable weight and stable temperature, so the model was skipped (${f(o.gated_latency_us)} µs). Active windows ran the distilled INT8 student (${f(o.model_latency_us)} µs vs ${f(b.latency_us)} µs, model-only saving ${f(pct(b.latency_us,o.model_latency_us))}%).</p>
+ <p><b>Data:</b> synthetic sensor windows with a field-like mix (70% idle). Retrain on logged hardware data before judging final accuracy.</p>`;
+</script>

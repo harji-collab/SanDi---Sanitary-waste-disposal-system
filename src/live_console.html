@@ -1,0 +1,437 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>SanDi Live Console</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout: brand bar with connection control, live state + sensor tiles, signal traces, edge-AI counters and actuator actions, event log, then the before/after benchmark.
+   Palette sampled from the SanDi render: blush ground, SanDi pink, deep rose wordmark, charcoal display band. */
+:root{
+  --bg:#fcf1f4; --surface:#ffffff; --fg:#352f33; --muted:#7d6a71; --line:#f0d3dc;
+  --brand:#d6517c; --rose:#b1405c; --blush:#fbe1e9; --band:#352f33; --bandfg:#fbe9ef;
+  --before:#c9b3bb; --after:#d6517c; --good:#2f9a6a; --warn:#c98a12; --bad:#c0392b; --idle:#8d7b82;
+  --font:"Raleway","Segoe UI",system-ui,-apple-system,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#1d1519; --surface:#271c21; --fg:#f6e8ed; --muted:#bfa3ad; --line:#3d2b33;
+  --brand:#ee6f98; --rose:#f39ab6; --blush:#3a2430; --band:#120d10; --bandfg:#fbe9ef;
+  --before:#6f5a63; --after:#ee6f98; --good:#5cc995; --warn:#e7b04a; --bad:#ef7a6b; --idle:#a8949c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#1d1519; --surface:#271c21; --fg:#f6e8ed; --muted:#bfa3ad; --line:#3d2b33;
+  --brand:#ee6f98; --rose:#f39ab6; --blush:#3a2430; --band:#120d10; --bandfg:#fbe9ef;
+  --before:#6f5a63; --after:#ee6f98; --good:#5cc995; --warn:#e7b04a; --bad:#ef7a6b; --idle:#a8949c; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:15px/1.55 var(--font);font-feature-settings:"lnum","tnum";padding-inline:16px;padding-block:20px 40px}
+.wrap{max-width:1040px;margin:0 auto;display:grid;gap:28px}
+.brandbar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:14px;padding-bottom:14px;border-bottom:2px solid var(--brand)}
+.wordmark{font:800 30px/1 var(--font);color:var(--rose);display:flex;align-items:center;gap:8px}
+.wordmark svg{width:18px;height:18px;fill:var(--brand);flex:none}
+.wordmark small{display:block;font:600 10px var(--font);letter-spacing:.14em;text-transform:uppercase;color:var(--brand);margin-top:4px}
+.conn{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:8px;font:700 12px var(--font);letter-spacing:.06em;padding:7px 12px;border-radius:99px;background:var(--blush);color:var(--fg)}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--idle)}
+.chip[data-s="live"] .dot{background:var(--good);box-shadow:0 0 0 0 var(--good);animation:pulse 1.6s infinite}
+.chip[data-s="demo"] .dot{background:var(--warn)}
+.chip[data-s="lost"] .dot{background:var(--bad)}
+@keyframes pulse{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--good) 60%,transparent)}100%{box-shadow:0 0 0 10px transparent}}
+@media (prefers-reduced-motion:reduce){.chip .dot{animation:none!important}}
+button{font:700 13px var(--font);border-radius:8px;padding:9px 14px;cursor:pointer;border:1.5px solid var(--brand);background:var(--brand);color:#fff}
+button.ghost{background:transparent;color:var(--brand)}
+button:focus-visible{outline:3px solid var(--rose);outline-offset:2px}
+.hint{font-size:13px;color:var(--muted);margin:0;flex-basis:100%;text-align:right}
+.hint:empty{display:none}
+h1{font:700 clamp(24px,5vw,34px)/1.15 var(--font);margin:0;text-wrap:balance}
+h2{font:700 19px var(--font);margin:0 0 12px;color:var(--rose)}
+.eyebrow{font:700 12px var(--font);letter-spacing:.14em;text-transform:uppercase;color:var(--brand)}
+.sub{color:var(--muted);margin:0;max-width:66ch}
+header{display:grid;gap:8px}
+
+/* live display band — echoes the charcoal status screen on the unit */
+.band{background:var(--band);color:var(--bandfg);border-radius:16px;padding:20px;display:grid;grid-template-columns:minmax(220px,1.1fr) 2fr;gap:20px}
+.state{display:grid;gap:6px;align-content:start}
+.state .lab{font:700 11px var(--font);letter-spacing:.14em;text-transform:uppercase;opacity:.7}
+.state .name{font:800 clamp(28px,5vw,40px)/1 var(--font)}
+.state .conf{font-size:13px;opacity:.8}
+.state .badge{justify-self:start;font:700 11px var(--font);letter-spacing:.1em;text-transform:uppercase;padding:5px 10px;border-radius:99px;background:color-mix(in srgb,var(--bandfg) 14%,transparent)}
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.tile{background:color-mix(in srgb,var(--bandfg) 8%,transparent);border-radius:12px;padding:12px 14px;display:grid;gap:4px;min-width:0}
+.tile .k{font:600 11px var(--font);letter-spacing:.1em;text-transform:uppercase;opacity:.7}
+.tile .v{font:800 24px/1.1 var(--font);white-space:nowrap}
+.tile .v small{font-size:13px;font-weight:600;opacity:.75;margin-left:3px}
+.fill{height:6px;border-radius:3px;background:color-mix(in srgb,var(--bandfg) 18%,transparent);overflow:hidden}
+.fill i{display:block;height:100%;background:var(--brand);transition:width .3s}
+.s-IDLE{color:var(--bandfg)} .s-DISPOSAL{color:#7fd4ae} .s-NEAR_FULL{color:#f1c062} .s-FULL{color:#ff9b6b} .s-THERMAL_ALERT{color:#ff6b6b}
+
+.grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:20px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;min-width:0}
+.trace{display:grid;grid-template-columns:110px 1fr;gap:4px 12px;align-items:center}
+.trace .k{font-size:13px;font-weight:600}
+.trace .k small{display:block;color:var(--muted);font-weight:500}
+canvas{width:100%;height:56px;display:block}
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 18px}
+.stat .v{font:800 26px/1.1 var(--font);color:var(--brand)}
+.stat .k{font-size:12.5px;color:var(--muted)}
+.actions{display:grid;gap:8px;margin-top:16px}
+.act{display:flex;align-items:center;gap:10px;font-size:14px;padding:8px 10px;border-radius:8px;color:var(--muted)}
+.act b{font-weight:700}
+.act.on{background:var(--blush);color:var(--fg)}
+.act .led{width:10px;height:10px;border-radius:50%;border:2px solid var(--before);flex:none}
+.act.on .led{background:var(--brand);border-color:var(--brand)}
+.log{list-style:none;margin:0;padding:0;display:grid;gap:2px;font-size:13.5px}
+.log li{display:grid;grid-template-columns:76px 1fr;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)}
+.log time{color:var(--muted)}
+
+/* benchmark */
+.verdict{display:flex;flex-wrap:wrap;gap:14px 36px;align-items:center}
+.verdict .big{font:800 42px/1 var(--font);color:var(--brand)}
+.verdict .lab{font-size:13px;color:var(--muted);margin-top:4px}
+.pill{font:700 12px var(--font);letter-spacing:.1em;padding:6px 12px;border-radius:99px;color:#fff;background:var(--good)}
+.legend{display:flex;flex-wrap:wrap;gap:18px;font-size:13px;color:var(--muted);margin:16px 0 8px}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.rows{display:grid;gap:16px}
+.row{display:grid;grid-template-columns:160px 1fr;gap:6px 16px;align-items:center}
+.row .name{font-weight:700}
+.row .name small{display:block;color:var(--muted);font-weight:500;font-size:12px}
+.bars{display:grid;gap:4px;min-width:0}
+.bar{display:flex;align-items:center;gap:8px}
+.bar i{display:block;height:16px;border-radius:0 8px 8px 0;min-width:2px}
+.bar span{font-size:13px;font-weight:600;white-space:nowrap}
+.delta{font:700 13px var(--font);grid-column:2;color:var(--brand)}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:right;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{font:700 11.5px var(--font);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.notes{color:var(--muted);font-size:13px;display:grid;gap:6px}
+.notes p{margin:0;max-width:78ch}
+
+@media (max-width:860px){.band,.grid2{grid-template-columns:1fr}.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:520px){.row{grid-template-columns:1fr}.delta{grid-column:1}.hint{text-align:left}.trace{grid-template-columns:1fr}}
+</style>
+
+<div class="wrap">
+  <div class="brandbar">
+    <div class="wordmark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.2 0 3.6 1.2 5.3 3.1 1.7-1.9 3.1-3.1 5.3-3.1 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z"/></svg><div>SanDi<small>Smart menstrual &amp; diaper disposal system</small></div></div>
+    <div class="conn">
+      <span class="chip" id="chip" data-s="off"><span class="dot"></span><span id="chiptext">Not connected</span></span>
+      <button id="btnConnect" type="button">Connect device</button>
+      <button id="btnDemo" type="button" class="ghost">Stop demo</button>
+      <p class="hint" id="hint"></p>
+    </div>
+  </div>
+
+  <header>
+    <div class="eyebrow">Team SANDI · Physical AI on the edge</div>
+    <h1>Live unit console</h1>
+    <p class="sub">IR presence, chamber temperature and load-cell readings stream from the ESP32 at 10 Hz. Every second the distilled edge model classifies the last 3.2 s and drives the disposal cycle.</p>
+  </header>
+
+  <section class="band" aria-live="polite">
+    <div class="state">
+      <span class="lab">Unit state</span>
+      <span class="name s-IDLE" id="stName">Waiting</span>
+      <span class="conf" id="stConf">Collecting the first 3.2 s window</span>
+      <span class="badge" id="stPath">—</span>
+    </div>
+    <div class="tiles">
+      <div class="tile"><span class="k">IR presence</span><span class="v" id="tIr">—</span></div>
+      <div class="tile"><span class="k">Chamber temp</span><span class="v" id="tTemp">—</span></div>
+      <div class="tile"><span class="k">Load</span><span class="v" id="tW">—</span><div class="fill"><i id="tFill" style="width:0%"></i></div></div>
+      <div class="tile"><span class="k">Board power</span><span class="v" id="tP">—</span></div>
+    </div>
+  </section>
+
+  <section class="grid2">
+    <div class="card">
+      <h2>Signals, last 60 s</h2>
+      <div class="trace">
+        <div class="k">IR presence<small>0 / 1</small></div><canvas id="cIr" height="56"></canvas>
+        <div class="k">Temperature<small>°C</small></div><canvas id="cTemp" height="56"></canvas>
+        <div class="k">Load<small>grams</small></div><canvas id="cW" height="56"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Edge AI this session</h2>
+      <div class="stats">
+        <div class="stat"><div class="v" id="sWin">0</div><div class="k">windows classified</div></div>
+        <div class="stat"><div class="v" id="sGate">0%</div><div class="k">skipped by event gate</div></div>
+        <div class="stat"><div class="v" id="sLat">—</div><div class="k">avg model time in this browser</div></div>
+        <div class="stat"><div class="v" id="sSaved">0 mJ</div><div class="k">compute energy saved vs FP32 baseline</div></div>
+      </div>
+      <div class="actions" id="actions"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Event log</h2>
+    <ul class="log" id="log"><li><time>—</time><span>No state changes yet</span></li></ul>
+  </section>
+
+  <section class="card">
+    <h2>Before vs after optimisation</h2>
+    <div class="verdict" id="verdict"></div>
+    <div class="legend"><span><i class="sw" style="background:var(--before)"></i>Baseline FP32 MLP</span><span><i class="sw" style="background:var(--after)"></i>Optimised: distilled + INT8 + event gating</span></div>
+    <div class="rows" id="rows"></div>
+  </section>
+
+  <section class="grid2">
+    <div class="card">
+      <h2>At fleet scale</h2>
+      <p class="sub" id="scale-sub" style="font-size:13px;margin-bottom:8px"></p>
+      <div class="tablewrap"><table id="fleet"></table></div>
+    </div>
+    <div class="card">
+      <h2>Recall by unit state</h2>
+      <div class="tablewrap"><table id="recall"></table></div>
+    </div>
+  </section>
+
+  <section class="notes" id="notes"></section>
+</div>
+
+<script>
+// SanDi edge engine: the same gate + compact features + distilled student as pipeline.py
+const CAP_G = 3000, CLASSES = ["IDLE", "DISPOSAL", "NEAR_FULL", "FULL", "THERMAL_ALERT"];
+const mean = (a, s = 0, e = a.length) => { let t = 0; for (let i = s; i < e; i++) t += a[i]; return t / (e - s); };
+
+function quietWin(win) {               // win: 32 x [ir, tempC, weightG]
+  let wmin = Infinity, wmax = -Infinity;
+  for (const r of win) { if (r[0] > 0) return false; if (r[2] < wmin) wmin = r[2]; if (r[2] > wmax) wmax = r[2]; }
+  if (wmax - wmin >= 40) return false;
+  const t = win.map(r => r[1]);
+  return Math.abs(mean(t, 28) - mean(t, 0, 4)) < 1.0;
+}
+function heldState(win) {
+  const lvl = mean(win.map(r => r[2])) / CAP_G;
+  return lvl > 0.9 ? 3 : lvl > 0.7 ? 2 : 0;
+}
+function compactFeatures(win) {
+  const ds = [];                         // 8 x 3 downsampled
+  for (let k = 0; k < 8; k++) { const r = [0, 0, 0];
+    for (let j = 0; j < 4; j++) for (let c = 0; c < 3; c++) r[c] += win[k * 4 + j][c] / 4; ds.push(r); }
+  const ir = win.map(r => r[0]), w = win.map(r => r[2]);
+  return [...ds.map(r => r[0]), ...ds.map(r => (r[1] - 30) / 10), ...ds.map(r => r[2] / CAP_G),
+    mean(ir), Math.max(...ir), (ds[7][1] - ds[0][1]) / 10, (ds[7][2] - ds[0][2]) / 200,
+    mean(w) / CAP_G, (Math.max(...w) - Math.min(...w)) / 1000];
+}
+function studentPredict(M, f) {
+  const h = M.b1.map((b, j) => { let s = b; for (let i = 0; i < f.length; i++) s += f[i] * M.W1[i][j]; return s > 0 ? s : 0; });
+  const o = M.b2.map((b, k) => { let s = b; for (let j = 0; j < h.length; j++) s += h[j] * M.W2[j][k]; return s; });
+  const mx = Math.max(...o), e = o.map(v => Math.exp(v - mx)), z = e.reduce((a, b) => a + b);
+  const p = e.map(v => v / z); const k = p.indexOf(Math.max(...p));
+  return { cls: k, conf: p[k] };
+}
+function classify(M, win) {
+  if (quietWin(win)) return { cls: heldState(win), conf: 1, gated: true };
+  return { ...studentPredict(M, compactFeatures(win)), gated: false };
+}
+
+const M = {"W1": [[-0.23508000373840332, -0.09990700334310532, 0.7513329982757568, 0.14510700106620789, 0.7678340077400208, 0.017899999395012856, -0.08342400193214417, 0.18628600239753723, -0.0886949971318245, -4.8999998398358e-05, 0.08180899918079376, -0.16805100440979004, -0.07875499874353409, 0.008616000413894653, 0.013728000223636627, -0.04393000155687332, -0.040998999029397964, 0.4429219961166382, 0.10979100316762924, 0.2585600018501282, 0.4417490065097809, 0.10919299721717834, -0.19927500188350677, 0.3201580047607422], [-0.5138469934463501, -0.529118001461029, 0.5857980251312256, 0.6773750185966492, 0.78022301197052, -0.1722699999809265, -0.1475449949502945, -0.3695079982280731, -0.14843499660491943, 5.999999848427251e-05, -0.19657200574874878, -0.4576979875564575, -0.1395300030708313, 0.03585600107908249, 0.09182800352573395, 0.09291800111532211, 0.3041659891605377, 0.46053600311279297, 0.09103400260210037, 0.06645800173282623, 0.27405500411987305, 0.332071989774704, -0.4143890142440796, 0.5071300268173218], [-0.25638699531555176, -0.5338860154151917, 0.7446159720420837, 0.4129289984703064, 1.10322904586792, -0.10653699934482574, -0.014295999892055988, -0.723878026008606, 0.08832400292158127, -4.3000000005122274e-05, 0.0628649964928627, -0.29087498784065247, -0.2874630093574524, -0.6362980008125305, -0.19097399711608887, -0.41930100321769714, 0.032666001468896866, 0.21051600575447083, 0.17199000716209412, 0.127469003200531, 0.6765909790992737, 0.057172998785972595, -0.28905999660491943, 0.8282210230827332], [-0.13704000413417816, -0.6240220069885254, 0.7166810035705566, 0.35531800985336304, 0.9639750123023987, -0.0324460007250309, -0.402536004781723, -0.765392005443573, -0.0283610001206398, 0.0, -0.12466099858283997, -0.19740800559520721, -0.008182000368833542, -0.12866799533367157, -0.39871299266815186, -0.3813369870185852, 0.2889379858970642, 0.6365919709205627, -0.09962400048971176, 0.14819400012493134, 0.03571999818086624, 0.5099530220031738, -0.4365760087966919, 0.4623109996318817], [-0.4027459919452667, -0.7749000191688538, 0.6577370166778564, 0.27863699197769165, 1.0158129930496216, -0.18304899334907532, -0.295646995306015, -0.06988099962472916, -0.10296300053596497, 0.00011600000289035961, 0.08993200212717056, -0.4553009867668152, -0.2774670124053955, 0.09010499715805054, -0.17845800518989563, 0.3427700102329254, 0.3880000114440918, 0.27007201313972473, 0.1645289957523346, 0.0521249994635582, 0.2714020013809204, 0.28836899995803833, 0.6849290132522583, 0.4284749925136566], [-0.12975500524044037, 0.060864001512527466, 0.5867670178413391, 0.339154988527298, 0.6802459955215454, -0.009208999574184418, -0.006837000139057636, -0.18156999349594116, -0.02865299955010414, -0.0, 0.10037799924612045, -0.4318540096282959, -0.22322599589824677, -0.7478510141372681, 0.09543199837207794, 0.2933880090713501, 0.30428698658943176, 0.34184500575065613, 0.07290899753570557, 0.1157979965209961, 0.25682100653648376, -0.009730000048875809, 0.07407499849796295, 0.2961139976978302], [0.004887999966740608, 0.1438159942626953, 0.002005999907851219, 0.2798129916191101, 0.24318400025367737, 0.3296709954738617, 0.006603999994695187, 0.5265120267868042, -0.18857599794864655, 2.9999999242136255e-05, -0.124719999730587, 0.056612998247146606, 0.21814000606536865, -0.024315999820828438, 0.15246699750423431, 0.07550500333309174, 0.25527501106262207, 0.11952000111341476, 0.07172700017690659, 0.2796039879322052, 0.2795239984989166, 0.20529800653457642, -0.33535298705101013, -0.20782700181007385], [0.273734986782074, -0.10064899921417236, 0.17828300595283508, -0.09491200000047684, 0.24112500250339508, -0.15029600262641907, 0.23601999878883362, 0.13315899670124054, -0.08444999903440475, 0.03928700089454651, 0.04658599942922592, 0.14410200715065002, -0.05958399921655655, 0.06813299655914307, 0.3195970058441162, 0.009569000452756882, 0.2475219964981079, 0.0018729999428614974, 0.001436999998986721, 0.2782300114631653, 0.4505099952220917, -0.13194699585437775, -0.10649199783802032, -0.1707960069179535], [-0.6603590250015259, 0.44909900426864624, 0.0947749987244606, 0.38553598523139954, -1.0884079933166504, 0.02186799980700016, -0.49625998735427856, 0.2376839965581894, -0.33037298917770386, 0.08348099887371063, -0.022995000705122948, -0.15009300410747528, -0.3633800148963928, -0.5329610109329224, -0.5427219867706299, 0.4230799973011017, -0.3191159963607788, -0.3133249878883362, 0.31305500864982605, -0.3774090111255646, 0.34303200244903564, 0.09802699834108353, -0.17245300114154816, -0.18209800124168396], [-0.3702389895915985, 0.04386499896645546, 0.013616000302135944, 0.5380650162696838, -0.5483819842338562, 0.40856900811195374, -0.2807149887084961, 0.4123780131340027, -0.22157800197601318, 0.24243000149726868, 0.1882060021162033, -0.1973399966955185, 0.32798299193382263, 0.1907929927110672, -0.5957210063934326, 0.14919599890708923, -0.19937099516391754, -0.7977820038795471, -0.1616310030221939, -0.10971300303936005, 0.06934399902820587, 0.21223700046539307, -0.13787099719047546, -0.19691799581050873], [0.22608500719070435, -0.17773999273777008, -0.023365000262856483, -0.013244999572634697, -0.13450400531291962, 0.05618700012564659, -0.054538000375032425, -0.06465599685907364, -0.15523000061511993, -0.027608999982476234, -0.05549599975347519, 0.2386000007390976, 0.1831900030374527, 0.28196200728416443, 0.18133699893951416, -0.06477899849414825, -0.037060998380184174, -0.24719500541687012, 0.2718519866466522, -0.10164400190114975, -0.09413199871778488, -0.059831999242305756, -0.3560290038585663, 0.12337400019168854], [0.2904999852180481, 0.1784909963607788, -0.16218100488185883, 0.1984959989786148, -0.24166899919509888, 0.08509200066328049, 0.23880000412464142, 0.30211400985717773, 0.03330099955201149, 0.2647779881954193, -0.17489799857139587, 0.23064100742340088, 0.29166799783706665, 0.3578200042247772, 0.1727840006351471, 0.30730700492858887, -0.08408500254154205, 0.1603199988603592, 0.06134999915957451, -0.21613499522209167, -0.07330799847841263, -0.048652999103069305, 0.2723270058631897, -0.10264000296592712], [0.27556300163269043, -0.024229999631643295, -0.08912800252437592, -0.21370500326156616, 0.49109598994255066, -0.16846899688243866, -0.07623499631881714, -0.19858600199222565, -0.11477600038051605, 0.20705699920654297, 0.27067500352859497, 0.1986680030822754, 0.23920699954032898, 0.3336760103702545, 0.07461000233888626, -0.33392998576164246, 0.119268998503685, -0.023733999580144882, -0.24879899621009827, -0.14681799709796906, 0.1023230031132698, -0.1902260035276413, 0.1303810030221939, -0.2836639881134033], [0.05406399816274643, -0.512840986251831, 0.10617899894714355, -0.2733190059661865, 0.3641200065612793, 0.0032629999332129955, 0.13460800051689148, 0.05211000144481659, -0.004315999802201986, -0.251134991645813, -0.3978259861469269, -0.25208601355552673, -0.22557100653648376, 0.11517199873924255, 0.38048800826072693, -0.030168000608682632, 0.15799200534820557, 0.24669800698757172, -0.22112800180912018, 0.33970800042152405, -0.39114001393318176, 0.2033199965953827, 0.1353760063648224, 0.17955400049686432], [0.22943399846553802, -0.40567800402641296, 0.05018400028347969, -0.34677401185035706, 0.4351849853992462, -0.27519500255584717, -0.12529399991035461, -0.47410500049591064, 0.3620469868183136, -0.28712600469589233, -0.11541199684143066, -0.27986499667167664, -0.022102000191807747, 0.4517660140991211, 0.3868730068206787, -0.5586000084877014, 0.33320799469947815, 0.4317440092563629, 0.0067159999161958694, 0.2899099886417389, -0.31925100088119507, -0.2065259963274002, -0.1202080026268959, 0.3183630108833313], [0.2773340046405792, -0.07517299801111221, 0.05466099828481674, -0.26337701082229614, 0.8934850096702576, -0.08672700077295303, 0.09679099917411804, -0.32535699009895325, 0.493274986743927, 0.10306599736213684, 0.024305999279022217, -0.29364898800849915, 0.14054200053215027, 0.28321200609207153, 0.10051800310611725, -0.5833219885826111, 0.5943099856376648, 0.7508999705314636, -0.04449699819087982, 0.286653995513916, -0.020532000809907913, 0.03254200145602226, 0.22897300124168396, 0.05687800049781799], [0.3036139905452728, 0.20458100736141205, -0.08668900281190872, -0.42892199754714966, -0.21166099607944489, -0.18952800333499908, -0.3585380017757416, 0.4237639904022217, -0.37519600987434387, 0.16665099561214447, -0.49023500084877014, 0.9596999883651733, -0.22912099957466125, -0.18697500228881836, 0.1809850037097931, 0.2529430091381073, 0.21657000482082367, 0.5130389928817749, -0.2925719916820526, 0.012787999585270882, 1.0681010484695435, -0.21208199858665466, -0.13159899413585663, -0.04220899939537048], [0.16800400614738464, -0.37711599469184875, -0.6199480295181274, -0.24949100613594055, -0.5856540203094482, -0.2864289879798889, -0.2519240081310272, 0.31240999698638916, -0.459214985370636, -0.26728400588035583, -0.43518298864364624, 0.734561026096344, 0.18438799679279327, 0.23568099737167358, 0.4426029920578003, 0.23848199844360352, 0.3739840090274811, 0.2194029986858368, 0.28598201274871826, -0.5724869966506958, 1.0103960037231445, -0.3223699927330017, -0.18987900018692017, 0.2405720055103302], [-0.080874003469944, 0.03929999843239784, -0.2767769992351532, -0.2460460066795349, -0.25507301092147827, -0.26291701197624207, 0.07021799683570862, 0.4161379933357239, -0.30761799216270447, 0.15605799853801727, 0.1046919971704483, 0.3519259989261627, -0.3107759952545166, -0.19227400422096252, 0.7121620178222656, 0.7846249938011169, 0.595005989074707, 0.4975169897079468, -0.16453799605369568, 0.04466899856925011, 0.6551250219345093, -0.44172099232673645, 0.2823779881000519, -0.03837300091981888], [0.20546700060367584, -0.37614700198173523, -0.11886700242757797, 0.07061800360679626, -0.4348520040512085, -0.20229800045490265, -0.15404100716114044, 0.6342359781265259, -0.39237600564956665, -0.18435600399971008, -0.2126139998435974, 0.5219900012016296, 0.09104900062084198, -0.2668200135231018, 0.5030959844589233, 0.7546430230140686, 0.37468698620796204, 0.4768120050430298, 0.25397101044654846, -0.1169549971818924, 0.9540410041809082, 0.13687899708747864, 0.3117319941520691, 0.11772499978542328], [-0.22176900506019592, -0.22461700439453125, -0.4835439920425415, -0.22766399383544922, -0.520255982875824, -0.05230899900197983, -0.1505970060825348, 0.729233980178833, 0.09226100146770477, 0.010017000138759613, -0.32819798588752747, 0.7129700183868408, 0.12731300294399261, -0.1566299945116043, 0.535319983959198, 0.30737999081611633, 0.25885701179504395, 0.17097100615501404, -0.1958560049533844, -0.28145501017570496, 0.6928660273551941, -0.2544710040092468, 0.0006680000224150717, 0.32607200741767883], [-0.05967399850487709, 0.19248999655246735, 0.003249000059440732, -0.46710100769996643, -0.43225499987602234, -0.15739500522613525, -0.33808499574661255, 0.36197298765182495, -0.06054700165987015, 0.07926899939775467, -0.09605199843645096, 0.7900999784469604, -0.3347960114479065, -0.20166000723838806, 0.6176930069923401, 0.7110139727592468, 0.3196919858455658, 0.09449800103902817, -0.33772799372673035, -0.1452849954366684, 0.48994600772857666, -0.2513499855995178, 0.005642999894917011, 0.4489699900150299], [-0.22669799625873566, -0.15436199307441711, -0.5508249998092651, -0.27028000354766846, -0.18493300676345825, -0.26897698640823364, -0.26894500851631165, 0.20744599401950836, -0.16967499256134033, 0.08693300187587738, -0.06376700103282928, 0.9505689740180969, -0.47009098529815674, 0.0013119999784976244, 0.5679069757461548, 0.5175889730453491, 0.5999420285224915, -0.08168700337409973, 0.0954819992184639, -0.0760279968380928, 0.8249009847640991, -0.27668699622154236, 0.17849700152873993, -0.09733299911022186], [0.009463000111281872, -0.07603300362825394, -0.10534799844026566, -0.4368410110473633, -0.4486030042171478, -0.18007199466228485, 0.008647000417113304, 0.7214019894599915, -0.14035600423812866, -0.2042510062456131, 0.1435689926147461, 0.8982970118522644, -0.13566100597381592, 0.18588699400424957, 0.527131974697113, 0.7402939796447754, 0.5099740028381348, 0.5508599877357483, 0.24067899584770203, -0.5935789942741394, 0.599918007850647, -0.23893199861049652, 0.2850950062274933, 0.03508999943733215], [-0.6435610055923462, -0.36092498898506165, 0.6225879788398743, 0.8425260186195374, 0.9199879765510559, 0.15278199315071106, -0.14403299987316132, -0.7504600286483765, 0.09448900073766708, -6.000000212225132e-06, -0.21131399273872375, -0.7309120297431946, -0.3984760046005249, -0.02810000069439411, -0.10790000110864639, 0.27773499488830566, 0.4028930068016052, 0.4577629864215851, -0.12330000102519989, 0.5701550245285034, 0.06570400297641754, 0.25615501403808594, -0.12588100135326385, 0.8929299712181091], [-0.5125439763069153, 0.05885399878025055, 0.69063800573349, 0.004623000044375658, 0.5649219751358032, 0.14525599777698517, 0.17217199504375458, 0.07270199805498123, 0.0008570000063627958, -0.0696289986371994, 0.17312200367450714, -0.021525999531149864, 0.5022580027580261, -0.4563489854335785, 0.0014070000033825636, 0.21826499700546265, 0.18744200468063354, 0.23296700417995453, -0.09748300164937973, 1.3600419759750366, 0.098301000893116, 0.17494800686836243, 0.034240998327732086, 0.3882159888744354], [1.5287489891052246, -0.8273919820785522, 0.5367270112037659, -1.6204650402069092, 1.3881089687347412, -1.3729219436645508, -0.11080300062894821, -1.1150799989700317, 0.6769030094146729, -0.0017229999648407102, -0.12573300302028656, -0.21128499507904053, -0.1766909956932068, 0.01732500083744526, 0.3013559877872467, -0.7251420021057129, 1.1828219890594482, 1.2138689756393433, 0.2956230044364929, 0.6051239967346191, -1.623039960861206, -1.5672680139541626, -0.018699999898672104, 0.167043998837471], [-0.9037280082702637, -1.7686140537261963, 0.8372099995613098, 1.301571011543274, 1.5717259645462036, 0.0018230000277981162, -0.6103289723396301, -1.229367971420288, -0.6351040005683899, -0.00030399998649954796, 0.8387020230293274, -0.33636200428009033, -0.922245979309082, -0.19836099445819855, -1.2441879510879517, -0.6008489727973938, 0.32009100914001465, 0.8260179758071899, 0.023958999663591385, -0.17906199395656586, 0.39878401160240173, 0.7546799778938293, -0.12351199984550476, 0.9938219785690308], [0.14614300429821014, -0.3669840097427368, -0.04975700005888939, -0.07918299734592438, -0.13005900382995605, -0.0967480018734932, -0.33046799898147583, 0.40537500381469727, -0.28065699338912964, -0.10704799741506577, -0.49153798818588257, 0.8104810118675232, -0.39545801281929016, -0.022784000262618065, 0.6368740200996399, 0.5499619841575623, 0.5925310254096985, -0.030945999547839165, 0.20647700130939484, -0.5980550050735474, 0.8430989980697632, -0.23690100014209747, -0.00018699999782256782, 0.06318800151348114], [-1.0440629720687866, -1.0388870239257812, 0.687811017036438, 0.9349259734153748, 1.129734992980957, 0.012103999964892864, -0.1017640009522438, -0.6759020090103149, -0.15805600583553314, -0.02760699950158596, 0.29048898816108704, -1.020419955253601, -0.17625199258327484, 0.07935500144958496, -0.47843900322914124, 0.3710300028324127, 0.6082860231399536, 0.7384459972381592, -0.14053699374198914, 0.20927700400352478, -0.03728200122714043, 0.34084099531173706, 0.14793899655342102, 0.8027390241622925]], "b1": [1.472311019897461, 1.992210030555725, 0.2890680134296417, 2.2647058963775635, 0.7926520109176636, 1.6731289625167847, 1.9042160511016846, 0.6183099746704102, 2.117379903793335, -0.11798100173473358, 1.890246033668518, -0.8711000084877014, 1.6915940046310425, 1.614374041557312, -1.978422999382019, 0.13830499351024628, -1.403681993484497, -1.2443679571151733, -0.28659701347351074, 0.8034210205078125, -1.5679759979248047, 2.044243097305298, -0.5777869820594788, -0.5936909914016724], "W2": [[0.9788690209388733, -1.4716830253601074, 0.5749279856681824, -0.778240978717804, 1.9488060474395752], [1.6933740377426147, -0.41657501459121704, 0.3032650053501129, -1.0134940147399902, 0.1573760062456131], [-1.6698230504989624, 1.6217910051345825, 0.33753499388694763, -2.1535120010375977, -0.1426759958267212], [2.468842029571533, 2.157006025314331, -0.03269900009036064, -3.1674959659576416, -0.9468010067939758], [-2.35227108001709, 2.241481065750122, 0.8587740063667297, -2.225414991378784, 2.122498035430908], [2.005110025405884, 0.7202320098876953, 0.3015489876270294, -3.427795886993408, -0.7502080202102661], [2.472986936569214, 0.23513199388980865, 0.03815000131726265, -3.022830009460449, 1.2020560503005981], [0.7540889978408813, -1.0738929510116577, 0.3317149877548218, 0.5411760210990906, -0.3646549880504608], [1.9959959983825684, 0.4369570016860962, 0.36316099762916565, -4.4124298095703125, 1.5297280550003052], [-0.05174599960446358, 0.024726999923586845, -0.019592000171542168, 0.009882000274956226, -0.22167499363422394], [2.6560449600219727, 1.4408340454101562, -0.05830200016498566, -2.8397040367126465, 0.6475740075111389], [-0.7608820199966431, -1.191074013710022, 0.44142600893974304, 0.5264930129051208, -0.7355499863624573], [2.0427260398864746, 0.48042601346969604, 0.4099310040473938, -1.8645479679107666, 0.8780900239944458], [1.7448890209197998, 0.053224001079797745, 0.3486050069332123, -2.048677921295166, 1.0754549503326416], [-3.398677110671997, -2.216360092163086, -0.5048519968986511, 1.1751569509506226, 0.1827169954776764], [0.05556600168347359, -0.6005510091781616, -0.14625200629234314, 0.2809329926967621, -0.9177150130271912], [-1.8211009502410889, -0.05672299861907959, -0.19151799380779266, 1.2764660120010376, 0.3552890121936798], [-2.5688750743865967, 0.008945999667048454, -0.7578200101852417, 1.1060750484466553, 0.5302780270576477], [0.2294660061597824, -0.02994300052523613, 0.3174009919166565, -0.34590598940849304, -0.1592400074005127], [1.408033013343811, 1.1046949625015259, 0.24870499968528748, -3.5715789794921875, 1.5008189678192139], [-1.2529269456863403, -0.29684001207351685, 0.5365890264511108, 0.7962639927864075, -1.1822969913482666], [1.8629859685897827, 1.5914440155029297, 0.2103469967842102, -2.991597890853882, -0.10673200339078903], [0.19598600268363953, 0.1227950006723404, -0.8030490279197693, 0.6249650120735168, -0.2717739939689636], [-1.2901560068130493, 0.9985060095787048, -0.04493999853730202, 0.19162599742412567, -0.17859700322151184]], "b2": [0.8053479790687561, 0.41318899393081665, 0.0007099999929778278, -1.2857739925384521, 0.21019400656223297]};
+const R = {
+  "classes": [
+    "IDLE",
+    "DISPOSAL",
+    "NEAR_FULL",
+    "FULL",
+    "THERMAL_ALERT"
+  ],
+  "energy_method": "time x 15 W core (estimate)",
+  "assumptions": {
+    "core_watts": 15.0,
+    "units": 10000,
+    "inferences_per_sec_per_unit": 1.0,
+    "inr_per_kwh": 8.0,
+    "grid_kgco2_per_kwh": 0.71,
+    "test_windows": 20000
+  },
+  "baseline": {
+    "accuracy": 0.993,
+    "latency_us": 190.7852686666729,
+    "energy_uj": 2861.779030000094,
+    "macs": 216704,
+    "size_kb": 851.4931640625,
+    "power_w": 15.0,
+    "kwh_year": 250.6918430280082,
+    "inr_year": 2005.5347442240657,
+    "kgco2_year": 177.9912085498858
+  },
+  "optimized": {
+    "accuracy": 0.99715,
+    "student_only_accuracy": 0.9952,
+    "latency_us": 73.42348533519886,
+    "energy_uj": 1101.352280027983,
+    "model_latency_us": 109.41983966666649,
+    "gated_latency_us": 19.698118999997405,
+    "gate_rate": 0.4012,
+    "macs": 840,
+    "size_kb": 3.6728515625,
+    "power_w": 15.0,
+    "kwh_year": 96.4784597304513,
+    "inr_year": 771.8276778436104,
+    "kgco2_year": 68.49970640862043
+  },
+  "per_class_recall": {
+    "IDLE": {
+      "baseline": 1.0,
+      "optimized": 0.9999287190819017
+    },
+    "DISPOSAL": {
+      "baseline": 0.9993157714676703,
+      "optimized": 0.9993157714676703
+    },
+    "NEAR_FULL": {
+      "baseline": 0.915954415954416,
+      "optimized": 0.9700854700854701
+    },
+    "FULL": {
+      "baseline": 0.9760765550239234,
+      "optimized": 0.9856459330143541
+    },
+    "THERMAL_ALERT": {
+      "baseline": 1.0,
+      "optimized": 1.0
+    }
+  },
+  "energy_reduction_pct": 61.51511809673346,
+  "accuracy_loss_pts": -0.4149999999999987,
+  "pass": true
+};
+const LABEL={IDLE:"Idle",DISPOSAL:"Disposal",NEAR_FULL:"Near full",FULL:"Full",THERMAL_ALERT:"Thermal alert"};
+const ACTIONS={
+  IDLE:["Low-power standby, sensors at 10 Hz"],
+  DISPOSAL:["Lid cycle and intake sensing","Shredder, PTC dryer and UVC queued","Incineration batch counter +1"],
+  NEAR_FULL:["Service alert sent to facility team","Prioritise incineration batch"],
+  FULL:["Intake locked, display shows Full","Urgent emptying request"],
+  THERMAL_ALERT:["Heater cut off","Exhaust fan to maximum","Safety alert raised"]};
+const ALL_ACTIONS=[...new Set(Object.values(ACTIONS).flat())];
+const f=(v,d=1)=>Number(v).toLocaleString("en-IN",{maximumFractionDigits:d,minimumFractionDigits:d});
+const $=id=>document.getElementById(id);
+
+/* ---------- live state ---------- */
+const buf=[], hist=[]; let lastClassAt=0, lastState=null, src="off";
+const S={n:0,gated:0,modelMs:0,modelN:0,savedUJ:0};
+const P=R.baseline.power_w||15;
+const E_BASE=R.baseline.energy_uj, E_MODEL=R.optimized.model_latency_us*P, E_GATE=R.optimized.gated_latency_us*P;
+
+function setConn(s,text,hint=""){src=s;$("chip").dataset.s=s;$("chiptext").textContent=text;$("hint").textContent=hint;
+  $("btnDemo").textContent=s==="demo"?"Stop demo":"Run demo";}
+
+function ingest(ir,t,w,mw){
+  if(!isFinite(w)) w=buf.length?buf[buf.length-1][2]:0;
+  buf.push([ir,t,w]); if(buf.length>32) buf.shift();
+  hist.push([ir,t,w]); if(hist.length>600) hist.shift();
+  $("tIr").textContent=ir>0?"Detected":"Clear";
+  $("tTemp").innerHTML=f(t)+"<small>°C</small>";
+  $("tW").innerHTML=f(w,0)+"<small>g</small>";
+  $("tFill").style.width=Math.max(0,Math.min(100,w/CAP_G*100))+"%";
+  $("tP").innerHTML=mw>0?f(mw,0)+"<small>mW</small>":"—";
+  const now=performance.now();
+  if(buf.length===32 && now-lastClassAt>=1000){lastClassAt=now; runModel();}
+}
+function runModel(){
+  const t0=performance.now(); const r=classify(M,buf.map(x=>x.slice())); const dt=performance.now()-t0;
+  S.n++; if(r.gated){S.gated++;S.savedUJ+=E_BASE-E_GATE}else{S.modelMs+=dt;S.modelN++;S.savedUJ+=E_BASE-E_MODEL}
+  const c=CLASSES[r.cls];
+  $("stName").textContent=LABEL[c]; $("stName").className="name s-"+c;
+  $("stConf").textContent=r.gated?"Sensors quiet, state held without running the model":`Model confidence ${f(r.conf*100,1)}%`;
+  $("stPath").textContent=r.gated?"Event gate · model skipped":"Distilled student model";
+  $("sWin").textContent=S.n.toLocaleString("en-IN");
+  $("sGate").textContent=f(S.gated/S.n*100,0)+"%";
+  $("sLat").textContent=S.modelN?f(S.modelMs/S.modelN*1000,0)+" µs":"—";
+  $("sSaved").textContent=f(S.savedUJ/1000,1)+" mJ";
+  const on=new Set(ACTIONS[c]);
+  $("actions").innerHTML=ALL_ACTIONS.map(a=>`<div class="act ${on.has(a)?"on":""}"><span class="led"></span><span>${on.has(a)?"<b>"+a+"</b>":a}</span></div>`).join("");
+  if(c!==lastState){lastState=c; const li=document.createElement("li");
+    li.innerHTML=`<time>${new Date().toLocaleTimeString("en-IN",{hour12:false})}</time><span><b>${LABEL[c]}</b> · ${ACTIONS[c][0]}</span>`;
+    const log=$("log"); if(log.firstElementChild&&log.firstElementChild.textContent.includes("No state")) log.innerHTML="";
+    log.prepend(li); while(log.children.length>8) log.lastChild.remove();}
+}
+
+/* ---------- traces ---------- */
+function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim()}
+function draw(id,idx,lo,hi){
+  const c=$(id),dpr=devicePixelRatio||1,W=c.clientWidth,H=56; if(!W) return;
+  if(c.width!==W*dpr){c.width=W*dpr;c.height=H*dpr}
+  const g=c.getContext("2d"); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,W,H);
+  g.strokeStyle=css("--line"); g.lineWidth=1; g.beginPath(); g.moveTo(0,H-.5); g.lineTo(W,H-.5); g.stroke();
+  if(hist.length<2) return;
+  const vals=hist.map(r=>r[idx]); let a=lo??Math.min(...vals), b=hi??Math.max(...vals); if(b-a<1e-6){a-=1;b+=1}
+  const pad=(b-a)*.1; a-=pad; b+=pad;
+  const x=i=>i/(600-1)*W, y=v=>H-4-(v-a)/(b-a)*(H-8), off=600-hist.length;
+  g.beginPath(); vals.forEach((v,i)=>{i?g.lineTo(x(i+off),y(v)):g.moveTo(x(i+off),y(v))});
+  g.strokeStyle=css("--brand"); g.lineWidth=1.8; g.stroke();
+  g.lineTo(x(off+vals.length-1),H); g.lineTo(x(off),H); g.closePath(); g.globalAlpha=.12; g.fillStyle=css("--brand"); g.fill(); g.globalAlpha=1;
+  const lx=x(off+vals.length-1), ly=y(vals[vals.length-1]); g.beginPath(); g.arc(lx-2,ly,3,0,7); g.fillStyle=css("--rose"); g.fill();
+}
+function frame(){draw("cIr",0,0,1);draw("cTemp",1);draw("cW",2);requestAnimationFrame(frame)}
+requestAnimationFrame(frame);
+
+/* ---------- demo simulator (same physics as the training data) ---------- */
+let demoTimer=null, sim={w:900,t:28,mode:"idle",k:0,irLeft:0,step:0};
+function simStep(){
+  const s=sim; s.k++;
+  if(s.mode==="idle" && Math.random()<.012){s.mode="disposal";s.irLeft=8+Math.floor(Math.random()*8);s.step=40+Math.random()*80}
+  if(s.mode==="idle" && s.k%1200===0){s.mode="thermal";s.tk=0}
+  let ir=0;
+  if(s.mode==="disposal"){ir=Math.random()>.1?1:0; if(--s.irLeft<=0){s.w+=s.step;s.mode="idle"}}
+  if(s.mode==="thermal"){s.t+=.45; if(++s.tk>40){s.mode="cool"}}
+  if(s.mode==="cool"){s.t-=.025; if(s.t<=28.5){s.mode="idle"}}
+  if(s.w>3000*.98 && s.mode==="idle" && Math.random()<.004){s.w=600+Math.random()*300; addNote("Bin emptied by service team")}
+  const w=s.w+(Math.random()-.5)*10+(ir?(Math.random()-.5)*50:0);
+  const t=s.t+(Math.random()-.5)*.3;
+  ingest(ir,t,w,480+(ir?160:0)+(s.mode==="thermal"?90:0)+Math.random()*20);
+}
+function addNote(txt){const li=document.createElement("li");li.innerHTML=`<time>${new Date().toLocaleTimeString("en-IN",{hour12:false})}</time><span>${txt}</span>`;$("log").prepend(li)}
+function startDemo(){stopDemo(); setConn("demo","Demo mode · simulated unit","Simulated readings. Connect the ESP32 over USB for live data."); demoTimer=setInterval(simStep,100)}
+function stopDemo(){if(demoTimer){clearInterval(demoTimer);demoTimer=null}}
+$("btnDemo").addEventListener("click",()=>{if(src==="demo"){stopDemo();setConn("off","Not connected")}else startDemo()});
+
+/* ---------- Web Serial connection to the ESP32 ---------- */
+let port=null, reader=null;
+$("btnConnect").addEventListener("click",async()=>{
+  if(!("serial" in navigator)){setConn(src,$("chiptext").textContent,"USB connection needs Chrome or Edge on a laptop, with SanDi_Live.html opened from your files. This shared page runs in demo mode.");return}
+  try{
+    port=await navigator.serial.requestPort();
+    await port.open({baudRate:115200});
+  }catch(e){setConn(src,$("chiptext").textContent,e.name==="SecurityError"?"This page isn't allowed to use USB. Open SanDi_Live.html from your files in Chrome or Edge.":"No device selected. Plug in the ESP32 and pick its port.");return}
+  stopDemo(); buf.length=0; hist.length=0; setConn("live","Connected · ESP32 over USB");
+  const dec=new TextDecoderStream(); port.readable.pipeTo(dec.writable).catch(()=>{});
+  reader=dec.readable.getReader(); let carry="";
+  try{
+    for(;;){const {value,done}=await reader.read(); if(done) break; carry+=value;
+      const lines=carry.split(/\r?\n/); carry=lines.pop();
+      for(const ln of lines){const p=ln.split(","); if(p.length!==6||!/^\d+$/.test(p[0])) continue;
+        const [,ir,t,w,mv,ma]=p.map(Number); ingest(ir,t,w,mv*ma/1000);}
+    }
+  }catch(e){}
+  setConn("lost","Connection lost","Check the USB cable, then Connect device again, or run the demo.");
+});
+navigator.serial?.addEventListener?.("disconnect",()=>setConn("lost","Connection lost","The ESP32 was unplugged."));
+
+/* ---------- benchmark (from results.json) ---------- */
+const b=R.baseline,o=R.optimized,A=R.assumptions,pct=(a,c)=>100*(1-c/a);
+$("verdict").innerHTML=`
+  <div><div class="big">−${f(R.energy_reduction_pct)}%</div><div class="lab">energy per inference (target ≥ 50%)</div></div>
+  <div><div class="big" style="color:var(--fg)">${R.accuracy_loss_pts<=0?"+"+f(-R.accuracy_loss_pts,2):"−"+f(R.accuracy_loss_pts,2)} pts</div><div class="lab">accuracy change (limit −2 pts)</div></div>
+  <span class="pill" style="${R.pass?"":"background:var(--bad)"}">${R.pass?"TARGET MET":"TARGET NOT MET"}</span>`;
+const metrics=[["Energy / inference","µJ · "+R.energy_method.split(" (")[0],b.energy_uj,o.energy_uj,1],
+ ["Latency","µs per window, one core",b.latency_us,o.latency_us,1],["Model size","KB on disk",b.size_kb,o.size_kb,1],
+ ["Compute","multiply-accumulates",b.macs,o.macs,0],["Accuracy","% on "+A.test_windows.toLocaleString("en-IN")+" windows",b.accuracy*100,o.accuracy*100,2]];
+$("rows").innerHTML=metrics.map(([n,u,x,y,d])=>{const m=Math.max(x,y),acc=n==="Accuracy",w=v=>acc?(v-90)/10*100:v/m*100;
+  const dl=acc?`${y>=x?"+":""}${f(y-x,2)} pts · axis from 90%`:`−${f(pct(x,y))}%`;
+  return `<div class="row"><div class="name">${n}<small>${u}</small></div><div class="bars">
+   <div class="bar"><i style="width:${w(x)}%;background:var(--before)"></i><span>${f(x,d)}</span></div>
+   <div class="bar"><i style="width:${w(y)}%;background:var(--after)"></i><span>${f(y,d)}</span></div></div><div class="delta">${dl}</div></div>`}).join("");
+$("scale-sub").textContent=`${A.units.toLocaleString("en-IN")} units, ${A.inferences_per_sec_per_unit} inference per second each, all year. Grid ${A.grid_kgco2_per_kwh} kg CO₂/kWh, ₹${A.inr_per_kwh}/kWh.`;
+$("fleet").innerHTML=`<tr><th>Per year</th><th>Baseline</th><th>Optimised</th><th>Saved</th></tr>
+ <tr><td>Compute energy</td><td>${f(b.kwh_year)} kWh</td><td>${f(o.kwh_year)} kWh</td><td>${f(b.kwh_year-o.kwh_year)} kWh</td></tr>
+ <tr><td>Electricity cost</td><td>₹${f(b.inr_year,0)}</td><td>₹${f(o.inr_year,0)}</td><td>₹${f(b.inr_year-o.inr_year,0)}</td></tr>
+ <tr><td>Carbon</td><td>${f(b.kgco2_year)} kg</td><td>${f(o.kgco2_year)} kg</td><td>${f(b.kgco2_year-o.kgco2_year)} kg</td></tr>`;
+$("recall").innerHTML=`<tr><th>State</th><th>Baseline</th><th>Optimised</th></tr>`+Object.entries(R.per_class_recall).map(([k,v])=>
+ `<tr><td>${LABEL[k]}</td><td>${f(v.baseline*100,2)}%</td><td>${f(v.optimized*100,2)}%</td></tr>`).join("");
+$("notes").innerHTML=`<p><b>Energy measurement:</b> ${R.energy_method}. With an INA219 on the compute board's supply, the board power tile shows measured draw and the benchmark can be re-run on measured joules.</p>
+ <p><b>Where the saving comes from:</b> ${f(o.gate_rate*100)}% of benchmark windows were quiet and skipped the model (${f(o.gated_latency_us)} µs). Active windows ran the distilled INT8 student (${f(o.model_latency_us)} µs vs ${f(b.latency_us)} µs).</p>
+ <p><b>Data:</b> trained on synthetic windows with a field-like mix (70% idle). Retrain on logged unit data before final accuracy claims.</p>`;
+
+startDemo();   // opens in a working state; Connect device switches to live USB data
+</script>
+
+</body></html>

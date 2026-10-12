@@ -1,0 +1,69 @@
+{
+  "classes": [
+    "IDLE",
+    "DISPOSAL",
+    "NEAR_FULL",
+    "FULL",
+    "THERMAL_ALERT"
+  ],
+  "energy_method": "time x 15 W core (estimate)",
+  "assumptions": {
+    "core_watts": 15.0,
+    "units": 10000,
+    "inferences_per_sec_per_unit": 1.0,
+    "inr_per_kwh": 8.0,
+    "grid_kgco2_per_kwh": 0.71,
+    "test_windows": 20000
+  },
+  "baseline": {
+    "accuracy": 0.993,
+    "latency_us": 190.7852686666729,
+    "energy_uj": 2861.779030000094,
+    "macs": 216704,
+    "size_kb": 851.4931640625,
+    "power_w": 15.0,
+    "kwh_year": 250.6918430280082,
+    "inr_year": 2005.5347442240657,
+    "kgco2_year": 177.9912085498858
+  },
+  "optimized": {
+    "accuracy": 0.99715,
+    "student_only_accuracy": 0.9952,
+    "latency_us": 73.42348533519886,
+    "energy_uj": 1101.352280027983,
+    "model_latency_us": 109.41983966666649,
+    "gated_latency_us": 19.698118999997405,
+    "gate_rate": 0.4012,
+    "macs": 840,
+    "size_kb": 3.6728515625,
+    "power_w": 15.0,
+    "kwh_year": 96.4784597304513,
+    "inr_year": 771.8276778436104,
+    "kgco2_year": 68.49970640862043
+  },
+  "per_class_recall": {
+    "IDLE": {
+      "baseline": 1.0,
+      "optimized": 0.9999287190819017
+    },
+    "DISPOSAL": {
+      "baseline": 0.9993157714676703,
+      "optimized": 0.9993157714676703
+    },
+    "NEAR_FULL": {
+      "baseline": 0.915954415954416,
+      "optimized": 0.9700854700854701
+    },
+    "FULL": {
+      "baseline": 0.9760765550239234,
+      "optimized": 0.9856459330143541
+    },
+    "THERMAL_ALERT": {
+      "baseline": 1.0,
+      "optimized": 1.0
+    }
+  },
+  "energy_reduction_pct": 61.51511809673346,
+  "accuracy_loss_pts": -0.4149999999999987,
+  "pass": true
+}
